@@ -1,9 +1,14 @@
 <script setup>
+import ActiveOrdersList from './components/ActiveOrdersList.vue';
+
+defineProps({
+    initialOrders: {
+        type: Array,
+        default: () => [],
+    },
+});
 </script>
 
 <template>
-    <div class="p-6">
-        <h1 class="text-2xl font-semibold">Winch</h1>
-        <p class="mt-2 text-gray-600">Vue 3 is ready.</p>
-    </div>
+    <ActiveOrdersList :initial-orders="initialOrders" />
 </template>
