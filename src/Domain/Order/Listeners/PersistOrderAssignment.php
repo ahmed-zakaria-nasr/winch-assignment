@@ -23,6 +23,6 @@ class PersistOrderAssignment
 
         $this->driverContract->markUnavailable($event->driver->id);
 
-        OrderAssigned::dispatch($event->order->fresh())->afterCommit();
+        OrderAssigned::dispatch($event->order->fresh());
     }
 }
