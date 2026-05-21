@@ -1,58 +1,148 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# WINCH Assignment
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+---
 
-## About Laravel
+## التقنيات المستخدمة
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- Laravel
+- Vue.js
+- PostgreSQL
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+---
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## شو عملت
 
-## Learning Laravel
+بنيت الـ APIs المطلوبة:
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+**إسناد طلب لسائق**
+```http
+POST /api/orders/{id}/assign
+```
+يسند الطلب لأفضل سائق متاح — يعني متاح، ما عنده طلب نشط، والأقرب جغرافيًا لموقع الاستلام.
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+**عرض طلبات سائق**
+```http
+GET /api/drivers/{id}/orders
+```
+مع pagination وفلتر حسب الحالة، مثل:
+```http
+/api/drivers/1/orders?status=assigned
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+**واجهة Vue بسيطة على الصفحة الرئيسية** — قائمة الطلبات المعلّقة وزر Assign لكل طلب.
 
-## Contributing
+من ناحية الهيكلية، التزمت بالـ DDD المطلوب: `src/Domain` و `src/Presentation`، والـ Controller ما فيه منطق أعمال. الـ Order domain ما بتواصل مع الـ Driver مباشرة — بس عبر `DriverContract`. عملية الإسناد ماشية عبر Action و Events، واستخدمت transaction مع `lockForUpdate()` على الطلب.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+---
 
-## Code of Conduct
+## قرارات مهمة
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+**PostgreSQL** — اخترته لأنه يناسب الـ transactions والـ locking، وكمان فيه إمكانية حساب المسافة الجغرافية في الاستعلام.
 
-## Security Vulnerabilities
+**Contracts** — كل Service له interface، والاستدعاء دايمًا عبر dependency injection. هيك قلّلت الترابط بين الـ domains وطبّقت الهيكلية المطلوبة.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+**lockForUpdate()** — استخدمته على صف الطلب داخل transaction، عشان ما ينسند نفس الطلب مرتين لو وصل طلبين بنفس اللحظة.
 
-## License
+**اختيار السائق** — Haversine formula، مع استبعاد السائق غير المتاح أو يلي عنده طلب `assigned` / `in_transit`.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+---
+
+## أشياء ثانية ما عملتها (جزء أول)
+
+- قفل على السائق — حاليًا القفل على الطلب بس، فممكن طلبين concurrent يختاروا نفس السائق
+- إرجاع السائق `available` بعد ما يخلّص توصيل
+
+بعدين التاسك كانت موضحة انه الطلبات بتم اسنادها يدويا و هاد فعليا مش عملي لطلبات كثير و لازم يكون تلقائي من وقت م المستخدم يطلب سائق 
+
+و هالشي بيفتح علينا كثير سيناريوهات خصوصا بموضوع التزامن
+
+و هاي السيناروهات ما بنشتغل عليها كلها او ما بنلمها كلها لانه في قرارات بزنس بتخلينا نفلتر  هاي السناريوهات
+
+زي مثلا لو مستخدم طلب سائق و ما كان في ولا سائق متاح هل رح نحكيله فش ولا سائق متاح و حاول لحالك بعدين؟ ولا حنحطه في قائمة انتظار؟ ولا نعطيه اوبشن يختار هو عند الطلب؟ و لا نبعتله اشعار لما يصير في سائق متاح؟
+
+طيب لو بعتناله اشعار انه في سائق متاح و باللحظة هاي مستخدم ثاني طلب و كان انسب سائق نفس السائق يلي بعتنا اشعار للمستخدم الاول عشانه متاح
+شو حنحكي وقتها للمستخدم الاول؟
+
+طيب لو كان في اكثر من سائق حيوقع عليهم الاختيار اختار مين؟
+اعلى تقييم مثلا؟ اقدم سائق؟ الاقل طلبات مشان انصفهم؟ 
+
+طيب هل اصلا السائقين عندهم نظام موافقة ؟ 
+
+ف طبيعة السستم و البزنس هي يلي بتخلينا نتعامل مع هاي السيناريوهات 
+و كل سيناريو بفتح سيناريوهات ثانية و بسكر سناريوهات اخرى
+
+
+---
+
+## تشغيل المشروع
+
+```bash
+composer install
+npm install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate --seed
+```
+
+```env
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=winch
+DB_USERNAME=winch
+DB_PASSWORD=secret
+```
+
+```bash
+php artisan serve
+npm run dev
+```
+
+افتح: `http://127.0.0.1:8000`
+
+---
+
+## الجزء الثاني — قرار معماري
+
+أول شي لازم أعمله قبل أي حل هو أفهم وين المشكلة بالضبط، لأنه مش كل مرة الحل يكون Redis أو تغيير كبير بالتصميم.
+
+عندي مشكلتين:
+الكتابة صارت ثقيلة لأن كل إسناد بيمر على نفس جدول orders، والقراءة بطيئة لأن شاشة الطلبات بتقرأ من جدول كبر كثير. يعني المشكلة مش بس أداء، المشكلة توازن بين الكتابة والقراءة.
+
+### (أ) Index
+
+أول خطوة طبيعية إني أضيف indexes على الحقول اللي بصير عليها فلترة كثير، زي status و driver_id.
+
+بلشت فيه لأنه أقل تغيير وأسرع تأثير، وبعطيني تحسين مباشر بدون ما أغيّر المعمارية.
+
+بس عيبه إنه بيساعد القراءة وبأثر على الكتابة شوي، وما بحل إن الجدول نفسه كبر.
+
+فمش دايمًا هو أفضل حل.
+
+### (ب) Redis
+
+إذا القراءة كانت أعلى بكثير من الكتابة، هنا ببلّش أفكر بـ Redis ككاش، مثلاً الطلبات النشطة وحالة السائقين.
+
+بيناسب لما يكون في ضغط قراءة متكرر.
+
+بس لازم إدارة invalidation، وممكن يصير فرق بسيط بين الكاش والداتا، وكمان ما بحل إن قاعدة البيانات نفسها تحت ضغط.
+
+### (ج) جدول منفصل للطلبات النشطة
+
+الفكرة إن جدول orders يضل زي ما هو، ونعمل جدول ثاني فيه بس الطلبات النشطة.
+
+بيناسب لما الجدول الرئيسي كبر كثير، والقراءة غالبًا تكون على جزء صغير من البيانات.
+
+بس عيبه إنه في تكرار بيانات، ولازم نضمن التزامن بين الجدولين، ومنطق الكتابة بصير أعقد، بس بالمقابل القراءة بتصير أسرع وبنخف الضغط عن الجدول الأساسي.
+
+### من وين أبدأ؟
+
+ببلّش بـ index لأنه أبسط وأرخص حل. إذا ما كفى، بروح على Redis لأنه بحل القراءة بدون ما أغيّر تصميم النظام. وإذا بعدين صار النظام كبير والطلبات النشطة جزء صغير من كل البيانات، وقتها بفكر بجدول منفصل لأنه حل معماري أكبر مش بس تحسين.
+
+### الخلاصة
+
+الاختيار بالآخر بيعتمد وين الضغط الحقيقي بالنظام، وهاي القراءات بناخذها من الداتا أو من أي مصدر بنقدر نعمل عليه monitoring.
+
+وممكن كمان يكون في توقع مسبق من الـ QA أو من طبيعة النظام إنه الضغط بيكون في منطقة معينة أو بوقت معين، فبنشتغل أحيانًا على سيناريوهات متوقعة قبل ما تصير فعليًا ونبني عليها، لأنه في كثير حالات واحتمالات ممكن تصير بالنظام.
+
+او ممكن حتى نستخدم الثلاثة مع بعض و كل شغلة فيهم تحل طبقة معينة.
